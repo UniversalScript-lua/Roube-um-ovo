@@ -1,11 +1,14 @@
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
-local ragdollSpeed = 80
+local ragdollSpeed = 180
 local isRagdoll = false
 local ragdollObjects = {}
+local moveConnection
+local currentDirection = Vector3.zero
 
 local character
 local humanoid
@@ -20,9 +23,15 @@ end
 setupCharacter()
 
 local function stopRagdoll()
-	if not character then return end
-
 	isRagdoll = false
+	currentDirection = Vector3.zero
+
+	if moveConnection then
+		moveConnection:Disconnect()
+		moveConnection = nil
+	end
+
+	if not character then return end
 
 	for _, object in ipairs(ragdollObjects) do
 		if object and object.Parent then
@@ -52,11 +61,12 @@ local function activateRagdoll(direction)
 	end
 
 	isRagdoll = true
+	currentDirection = direction.Unit
 
 	for _, motor in ipairs(character:GetDescendants()) do
 		if motor:IsA("Motor6D") and motor.Part0 and motor.Part1 then
-			
 			if motor.Name ~= "RootJoint" then
+
 				local attachment0 = Instance.new("Attachment")
 				attachment0.CFrame = motor.C0
 				attachment0.Parent = motor.Part0
@@ -83,7 +93,20 @@ local function activateRagdoll(direction)
 
 	humanoid.PlatformStand = true
 
-	rootPart.AssemblyLinearVelocity = direction * ragdollSpeed
+	-- Mantém o personagem andando continuamente
+	moveConnection = RunService.Heartbeat:Connect(function()
+		if not isRagdoll or not rootPart or not rootPart.Parent then
+			return
+		end
+
+		local velocity = currentDirection * ragdollSpeed
+
+		rootPart.AssemblyLinearVelocity = Vector3.new(
+			velocity.X,
+			rootPart.AssemblyLinearVelocity.Y,
+			velocity.Z
+		)
+	end)
 end
 
 local function createButton(parent, text, position, color, callback)
@@ -108,6 +131,7 @@ local function createButton(parent, text, position, color, callback)
 end
 
 local oldGui = PlayerGui:FindFirstChild("RagdollPanel")
+
 if oldGui then
 	oldGui:Destroy()
 end
@@ -163,8 +187,15 @@ createButton(
 )
 
 LocalPlayer.CharacterAdded:Connect(function()
+	if moveConnection then
+		moveConnection:Disconnect()
+		moveConnection = nil
+	end
+
 	task.wait(1)
+
 	setupCharacter()
 	isRagdoll = false
+	currentDirection = Vector3.zero
 	table.clear(ragdollObjects)
 end)
